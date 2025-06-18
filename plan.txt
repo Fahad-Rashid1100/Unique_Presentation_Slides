@@ -1,0 +1,106 @@
+Excellent! You've provided the code for `app/page.tsx`. This is exactly what we need.
+
+After reviewing your code, the problem is very clear and you're extremely close to the solution.
+
+### The Core Problem
+
+The build is failing because of this component:
+
+```tsx
+import ParticleBackgroundCanvas from "@/components/particle-background"
+
+// ... later in the return statement ...
+<ParticleBackgroundCanvas accentColor={particleAccentColor} slideId={currentSlideData.id} />
+```
+
+A component named `ParticleBackgroundCanvas` almost certainly uses the HTML `<canvas>` element and browser-specific APIs (like `WebGL` or `2dContext`) to draw particles.
+
+**These browser APIs do not exist on the server.**
+
+When Next.js tries to pre-render this page during the build, it executes the code for `ParticleBackgroundCanvas`. The component's code tries to access something like `document.createElement('canvas')` or `canvas.getContext('2d')`, which results in an error like `cannot read properties of undefined` because `document` or `canvas` is `undefined`.
+
+Even though you have `"use client"` at the top, Next.js still performs an initial render on the server to generate the static HTML. Your `ParticleBackgroundCanvas` component is breaking that initial server render.
+
+---
+
+### The Fix: Use `next/dynamic` for Client-Only Components
+
+The solution is to tell Next.js explicitly: **"Do not try to render this component on the server. Only render it on the client's browser."**
+
+The tool for this is `next/dynamic` with the `ssr: false` option.
+
+Here is how to modify your `app/page.tsx` file to fix the build error.
+
+#### Step 1: Import `dynamic` from `next/dynamic`
+
+Add this line near your other imports.
+
+```tsx
+import dynamic from "next/dynamic"
+```
+
+#### Step 2: Dynamically Import Your Canvas Component
+
+Instead of the standard import, create a new dynamically imported version of your particle canvas. You can remove or comment out the old import line.
+
+```tsx
+// Remove or comment out this line:
+// import ParticleBackgroundCanvas from "@/components/particle-background"
+
+// Add this instead:
+const DynamicParticleBackground = dynamic(
+  () => import("@/components/particle-background"),
+  { 
+    ssr: false, // This is the crucial part
+    // Optional: add a fallback while the component loads on the client
+    loading: () => <div className="absolute inset-0 z-0" />
+  }
+)
+```
+
+#### Step 3: Use the New Dynamic Component in Your JSX
+
+In your `return` statement, replace `<ParticleBackgroundCanvas />` with your new dynamic component, `<DynamicParticleBackground />`.
+
+```tsx
+// ... inside your return statement ...
+
+<main className="...">
+  {/* OLD CODE */}
+  {/* <ParticleBackgroundCanvas accentColor={particleAccentColor} slideId={currentSlideData.id} /> */}
+
+  {/* NEW CODE */}
+  <DynamicParticleBackground accentColor={particleAccentColor} slideId={currentSlideData.id} />
+  
+  {/* ... rest of your JSX ... */}
+</main>
+```
+
+---
+
+### A Note on `React.lazy` vs `next/dynamic`
+
+You are using `React.lazy` for your slide layouts:
+```tsx
+const TitleLayout = React.lazy(() => import("@/components/slide-layouts/title-layout"))
+```
+While this works for client-side code splitting, the **idiomatic and recommended way in Next.js is to use `next/dynamic` for everything that needs to be code-split**, because it's designed to work seamlessly with Server-Side Rendering.
+
+Your current `React.lazy` usage is likely fine because it's wrapped in `<Suspense>` inside a `"use client"` component. However, to follow best practices and avoid potential future issues, you could also convert these to `next/dynamic`.
+
+**Example Conversion (Optional, but recommended):**
+
+```tsx
+// Before
+// const TitleLayout = React.lazy(() => import("@/components/slide-layouts/title-layout"))
+
+// After
+const TitleLayout = dynamic(() => import("@/components/slide-layouts/title-layout"))
+```
+`next/dynamic` also works with `<Suspense>` out of the box, so you wouldn't need to change anything else.
+
+### Summary of Changes
+
+1.  **Replace the static import** of `ParticleBackgroundCanvas` with a `next/dynamic` import that has `{ ssr: false }`.
+2.  **Use the new dynamic component** in your JSX.
+3.  Clear the Next.js cache (`rm -rf .next`) and run `bun run build` again. It should now succeed.
