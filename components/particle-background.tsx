@@ -1,5 +1,5 @@
 "use client"
-import { useRef, useMemo, useEffect } from "react"
+import { useRef, useMemo, useEffect, useState } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { Points, PointMaterial } from "@react-three/drei"
 import * as THREE from "three"
@@ -12,7 +12,13 @@ interface ParticleBackgroundProps {
 
 function Particles({ accentColor, slideId }: ParticleBackgroundProps) {
   const pointsRef = useRef<THREE.Points>(null!)
-  const materialRef = useRef<any>(null!) // Using 'any' for PointMaterial ref due to potential type issues
+   const materialRef = useRef<any>(null!) // Using 'any' for PointMaterial ref due to potential type issues
+   const [hasMounted, setHasMounted] = useState(false) // <-- Add mounted state
+
+   // This effect runs once on the client, after the component is safely in the DOM
+   useEffect(() => {
+     setHasMounted(true)
+   }, [])
 
   const particles = useMemo(() => {
     const count = 5000
@@ -47,7 +53,7 @@ function Particles({ accentColor, slideId }: ParticleBackgroundProps) {
         ease: "power2.inOut",
       })
     }
-  }, [accentColor])
+  }, [accentColor, hasMounted]) // <-- Add hasMounted to dependency array
 
   useFrame((state, delta) => {
     if (pointsRef.current) {
